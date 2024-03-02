@@ -4,6 +4,7 @@ import (
 	"encoding/csv"
 	"flag"
 	"fmt"
+	"io"
 	"io/fs"
 	"log"
 	"os"
@@ -15,7 +16,6 @@ var (
 )
 
 func init() {
-
 	flag.StringVar(&inputDirectory, "dir", ".", "Please type the directory to traverse")
 	flag.Parse()
 }
@@ -28,19 +28,17 @@ func main() {
 }
 
 func processFiles(path string, d fs.DirEntry, err error) error {
-
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	var rowsNum int
 	if d.IsDir() {
 		return nil
 	}
 
-	rowsNum, err = countRows(filepath.Join(path))
+	rowsNum, err := countRows(filepath.Join(path))
 	if err != nil {
-		log.Fatalf("Could process file:%v, error:%v", path, err)
+		log.Fatalf("Could not process file:%v, error:%v", path, err)
 		return err
 	}
 
@@ -50,20 +48,24 @@ func processFiles(path string, d fs.DirEntry, err error) error {
 
 func countRows(path string) (int, error) {
 	fd, err := os.Open(path)
-
 	if err != nil {
-
 		return 0, err
 	}
+	defer fd.Close()
 
 	reader := csv.NewReader(fd)
 
-	records, err := reader.ReadAll()
-	if err != nil {
-		return 0, err
+	// Use Read instead of ReadAll to avoid unnecessary allocations
+	var rowNumber int
+	for {
+		_, err := reader.Read()
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return 0, err
+		}
+		rowNumber++
 	}
-
-	rowNumber := len(records)
 
 	return rowNumber, nil
 }
